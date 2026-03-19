@@ -1,0 +1,195 @@
+name: Deploy iOS
+
+on:
+  workflow_dispatch:
+    inputs:
+      flavor:
+        description: Flavor to deploy
+        required: true
+        default: beta
+        type: choice
+        options:
+          - beta
+          - production
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-beta:
+    if: github.event_name == 'workflow_dispatch' && inputs.flavor == 'beta'
+    runs-on: macos-latest
+    env:
+      FLAVOR: beta
+      APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+      APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+      APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+      IOS_EXPORT_METHOD: ${{ secrets.IOS_EXPORT_METHOD }}
+      MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+      MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+      FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+      SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      - name: Install CocoaPods
+        run: pod install --project-directory=ios
+
+      - name: Decode App Store Connect API key
+        run: |
+          printf '%s' "$APP_STORE_CONNECT_API_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
+          echo "APP_STORE_CONNECT_API_KEY_PATH=$RUNNER_TEMP/AuthKey.p8" >> "$GITHUB_ENV"
+
+      - name: Prepare signing with match
+        run: bundle exec fastlane ios prepare_ios_signing flavor:$FLAVOR
+
+      - name: Build IPA
+        run: flutter build ipa --flavor "$FLAVOR" -t "lib/main_${FLAVOR}.dart" --export-method "${IOS_EXPORT_METHOD:-app-store}"
+
+      - name: Locate IPA
+        run: |
+          IPA_PATH="$(find build/ios/ipa -maxdepth 1 -name '*.ipa' | head -n 1)"
+          echo "IOS_IPA_PATH=$IPA_PATH" >> "$GITHUB_ENV"
+
+      - name: Verify archive signing
+        run: |
+          codesign -dv --verbose=4 build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app
+          ls -la build/ios/ipa
+
+      - name: Generate release notes
+        run: |
+          chmod +x fastlane/gen_release_notes
+          ./fastlane/gen_release_notes
+
+      - name: Deploy with Fastlane
+        run: bundle exec fastlane ios i_beta
+
+      - name: Upload iOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-beta-release
+          path: |
+            build/ios/ipa
+            build/ios/archive
+            fastlane/metadata/ios
+
+  deploy-production:
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.flavor == 'production')
+    runs-on: macos-latest
+    environment: ios-production
+    env:
+      FLAVOR: production
+      APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+      APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+      APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+      IOS_EXPORT_METHOD: ${{ secrets.IOS_EXPORT_METHOD }}
+      MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+      MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+      FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+      SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      - name: Install CocoaPods
+        run: pod install --project-directory=ios
+
+      - name: Decode App Store Connect API key
+        run: |
+          printf '%s' "$APP_STORE_CONNECT_API_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
+          echo "APP_STORE_CONNECT_API_KEY_PATH=$RUNNER_TEMP/AuthKey.p8" >> "$GITHUB_ENV"
+
+      - name: Prepare signing with match
+        run: bundle exec fastlane ios prepare_ios_signing flavor:$FLAVOR
+
+      - name: Build IPA
+        run: flutter build ipa --flavor "$FLAVOR" -t "lib/main_${FLAVOR}.dart" --export-method "${IOS_EXPORT_METHOD:-app-store}"
+
+      - name: Locate IPA
+        run: |
+          IPA_PATH="$(find build/ios/ipa -maxdepth 1 -name '*.ipa' | head -n 1)"
+          echo "IOS_IPA_PATH=$IPA_PATH" >> "$GITHUB_ENV"
+
+      - name: Verify archive signing
+        run: |
+          codesign -dv --verbose=4 build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app
+          ls -la build/ios/ipa
+
+      - name: Generate release notes
+        run: |
+          chmod +x fastlane/gen_release_notes
+          ./fastlane/gen_release_notes
+
+      - name: Deploy with Fastlane
+        run: bundle exec fastlane ios i_rel
+
+      - name: Upload iOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-production-release
+          path: |
+            build/ios/ipa
+            build/ios/archive
+            fastlane/metadata/ios

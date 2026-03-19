@@ -1,0 +1,341 @@
+fastlane_version "2.220.0"
+default_platform(:android)
+
+require "base64"
+require "shellwords"
+
+APP_IDS = {
+  "beta" => {
+    android: "com.example.ogra.beta",
+    ios: "com.example.ogra.beta",
+  },
+  "production" => {
+    android: "com.example.ogra",
+    ios: "com.example.ogra",
+  },
+}.freeze
+
+def project_root
+  @project_root ||= File.expand_path("..", __dir__)
+end
+
+def escaped_project_root
+  Shellwords.escape(project_root)
+end
+
+def flavor!(value = nil)
+  flavor = (value || ENV["FLAVOR"] || "production").to_s.downcase
+  UI.user_error!("Unsupported flavor '#{flavor}'.") unless APP_IDS.key?(flavor)
+  flavor
+end
+
+def android_app_id(flavor)
+  APP_IDS.fetch(flavor).fetch(:android)
+end
+
+def ios_app_id(flavor)
+  APP_IDS.fetch(flavor).fetch(:ios)
+end
+
+def pubspec_version
+  @pubspec_version ||= begin
+    version_line = File
+      .read(File.join(project_root, "pubspec.yaml"))
+      .lines
+      .find { |line| line.start_with?("version:") }
+    UI.user_error!("Missing pubspec version.") if version_line.nil?
+    version_line.split(":", 2).last.strip
+  end
+end
+
+def build_name
+  pubspec_version.split("+").first
+end
+
+def build_number
+  pubspec_version.split("+")[1] || "1"
+end
+
+def run_release_notes_generator!
+  sh("chmod +x #{File.join(project_root, 'fastlane', 'gen_release_notes')}")
+  sh(File.join(project_root, "fastlane", "gen_release_notes"))
+end
+
+def android_service_account_path!
+  path = ENV["ANDROID_SERVICE_ACCOUNT_JSON_PATH"].to_s
+  UI.user_error!("Missing ANDROID_SERVICE_ACCOUNT_JSON_PATH.") if path.empty?
+  UI.user_error!("Android service account JSON not found at #{path}.") unless File.exist?(path)
+  path
+end
+
+def app_store_connect_api_key_from_env!
+  key_id = ENV["APP_STORE_CONNECT_API_KEY_ID"].to_s
+  issuer_id = ENV["APP_STORE_CONNECT_API_ISSUER_ID"].to_s
+  key_content =
+    if !ENV["APP_STORE_CONNECT_API_KEY_PATH"].to_s.empty? &&
+         File.exist?(ENV["APP_STORE_CONNECT_API_KEY_PATH"])
+      File.read(ENV["APP_STORE_CONNECT_API_KEY_PATH"])
+    elsif !ENV["APP_STORE_CONNECT_API_KEY_BASE64"].to_s.empty?
+      Base64.strict_decode64(ENV["APP_STORE_CONNECT_API_KEY_BASE64"])
+    else
+      ""
+    end
+
+  UI.user_error!("Missing App Store Connect API key configuration.") if key_id.empty? || issuer_id.empty? || key_content.empty?
+
+  app_store_connect_api_key(
+    key_id: key_id,
+    issuer_id: issuer_id,
+    key_content: key_content,
+    in_house: false,
+  )
+end
+
+def ensure_android_aab!(flavor)
+  provided = ENV["ANDROID_AAB_PATH"].to_s
+  return provided if !provided.empty? && File.exist?(provided)
+
+  sh("cd #{escaped_project_root} && flutter pub get")
+  sh("cd #{escaped_project_root} && flutter build appbundle --release --flavor #{flavor} -t lib/main_#{flavor}.dart")
+
+  artifact = File.join(
+    project_root,
+    "build",
+    "app",
+    "outputs",
+    "bundle",
+    "#{flavor}Release",
+    "app-#{flavor}-release.aab",
+  )
+  UI.user_error!("Expected AAB at #{artifact}.") unless File.exist?(artifact)
+  artifact
+end
+
+def ensure_ios_ipa!(flavor)
+  provided = ENV["IOS_IPA_PATH"].to_s
+  return provided if !provided.empty? && File.exist?(provided)
+
+  export_method = ENV["IOS_EXPORT_METHOD"].to_s.empty? ? "app-store" : ENV["IOS_EXPORT_METHOD"]
+  sh("cd #{escaped_project_root} && flutter pub get")
+  sh("cd #{escaped_project_root} && pod install --project-directory=ios")
+  sh("cd #{escaped_project_root} && flutter build ipa --flavor #{flavor} -t lib/main_#{flavor}.dart --export-method #{export_method}")
+
+  artifact = Dir[File.join(project_root, "build", "ios", "ipa", "*.ipa")].sort.last
+  UI.user_error!("No IPA found in build/ios/ipa.") if artifact.nil?
+  artifact
+end
+
+def ensure_ios_signing!(flavor, api_key)
+  match_git_url = ENV["MATCH_GIT_URL"].to_s
+  UI.user_error!("Missing MATCH_GIT_URL for match-based signing.") if match_git_url.empty?
+
+  setup_ci if is_ci
+  match(
+    type: "appstore",
+    app_identifier: [ios_app_id(flavor)],
+    readonly: is_ci,
+    git_url: match_git_url,
+    api_key: api_key,
+  )
+end
+
+def android_track_for(flavor)
+  return "production" if flavor == "production"
+  ENV["GOOGLE_PLAY_TRACK"].to_s.empty? ? "internal" : ENV["GOOGLE_PLAY_TRACK"]
+end
+
+def maybe_upload_android_crashlytics(flavor)
+  mapping_file = File.join(
+    project_root,
+    "build",
+    "app",
+    "outputs",
+    "mapping",
+    "#{flavor}Release",
+    "mapping.txt",
+  )
+  firebase_app_id_file = Dir[File.join(project_root, "android", "**", "firebase_app_id_file.json")].first
+  google_services_file = Dir[File.join(project_root, "android", "**", "google-services.json")].first
+
+  unless File.exist?(mapping_file) &&
+      (!firebase_app_id_file.to_s.empty? || !google_services_file.to_s.empty?) &&
+      !ENV["FIREBASE_TOKEN"].to_s.empty?
+    UI.important("Skipping Android Crashlytics mapping upload: Firebase/Crashlytics is not configured in this repo.")
+    return
+  end
+
+  UI.important("Android Crashlytics mapping upload is scaffolded but not activated yet for this project.")
+end
+
+def maybe_upload_ios_dsym
+  dsym_paths = Dir[File.join(project_root, "build", "ios", "archive", "**", "*.dSYM")]
+  google_service_info = Dir[File.join(project_root, "ios", "**", "GoogleService-Info.plist")].first
+
+  unless dsym_paths.any? && !google_service_info.to_s.empty? && !ENV["FIREBASE_TOKEN"].to_s.empty?
+    UI.important("Skipping iOS dSYM upload: Firebase/Crashlytics is not configured in this repo.")
+    return
+  end
+
+  UI.important("iOS dSYM upload is scaffolded but not activated yet for this project.")
+end
+
+def sync_metadata!(flavor)
+  run_release_notes_generator!
+
+  if !ENV["ANDROID_SERVICE_ACCOUNT_JSON_PATH"].to_s.empty? && File.exist?(ENV["ANDROID_SERVICE_ACCOUNT_JSON_PATH"])
+    supply(
+      package_name: android_app_id(flavor),
+      track: android_track_for(flavor),
+      json_key: android_service_account_path!,
+      metadata_path: File.join(project_root, "fastlane", "metadata", "android"),
+      skip_upload_aab: true,
+      skip_upload_apk: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      validate_only: false,
+    )
+  else
+    UI.important("Skipping Android metadata sync: missing Play service account secret.")
+  end
+
+  if !ENV["APP_STORE_CONNECT_API_KEY_ID"].to_s.empty?
+    deliver(
+      api_key: app_store_connect_api_key_from_env!,
+      app_identifier: ios_app_id(flavor),
+      metadata_path: File.join(project_root, "fastlane", "metadata", "ios"),
+      skip_binary_upload: true,
+      skip_screenshots: true,
+      submit_for_review: false,
+      force: true,
+      automatic_release: false,
+    )
+  else
+    UI.important("Skipping iOS metadata sync: missing App Store Connect API key secret.")
+  end
+end
+
+def notify_slack(message, success:)
+  return if ENV["SLACK_WEBHOOK"].to_s.empty?
+
+  slack(
+    message: message,
+    success: success,
+    slack_url: ENV["SLACK_WEBHOOK"],
+  )
+end
+
+platform :android do
+  desc "Deploy Android beta build to the internal track."
+  lane :a_beta do
+    flavor = "beta"
+    run_release_notes_generator!
+    aab_path = ensure_android_aab!(flavor)
+
+    supply(
+      aab: aab_path,
+      package_name: android_app_id(flavor),
+      track: android_track_for(flavor),
+      json_key: android_service_account_path!,
+      metadata_path: File.join(project_root, "fastlane", "metadata", "android"),
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+    )
+
+    maybe_upload_android_crashlytics(flavor)
+    notify_slack("Android beta deployed: v#{build_name}(#{build_number})", success: true)
+  end
+
+  desc "Deploy Android production build to Google Play production."
+  lane :a_rel do
+    flavor = "production"
+    run_release_notes_generator!
+    aab_path = ensure_android_aab!(flavor)
+
+    supply(
+      aab: aab_path,
+      package_name: android_app_id(flavor),
+      track: "production",
+      json_key: android_service_account_path!,
+      metadata_path: File.join(project_root, "fastlane", "metadata", "android"),
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+    )
+
+    maybe_upload_android_crashlytics(flavor)
+    notify_slack("Android production deployed: v#{build_name}(#{build_number})", success: true)
+  end
+end
+
+platform :ios do
+  desc "Prepare iOS signing assets with match."
+  lane :prepare_ios_signing do |options|
+    flavor = flavor!(options[:flavor])
+    api_key = app_store_connect_api_key_from_env!
+    ensure_ios_signing!(flavor, api_key)
+  end
+
+  desc "Deploy iOS beta build to TestFlight."
+  lane :i_beta do
+    flavor = "beta"
+    run_release_notes_generator!
+    api_key = app_store_connect_api_key_from_env!
+    ensure_ios_signing!(flavor, api_key)
+    ipa_path = ensure_ios_ipa!(flavor)
+
+    pilot(
+      api_key: api_key,
+      ipa: ipa_path,
+      app_identifier: ios_app_id(flavor),
+      skip_waiting_for_build_processing: true,
+      changelog: File.read(File.join(project_root, "fastlane", "metadata", "ios", "en-US", "whats_new.txt")),
+    )
+
+    maybe_upload_ios_dsym
+    notify_slack("iOS beta uploaded to TestFlight: v#{build_name}(#{build_number})", success: true)
+  end
+
+  desc "Deploy iOS production build to App Store Connect."
+  lane :i_rel do
+    flavor = "production"
+    run_release_notes_generator!
+    api_key = app_store_connect_api_key_from_env!
+    ensure_ios_signing!(flavor, api_key)
+    ipa_path = ensure_ios_ipa!(flavor)
+
+    deliver(
+      api_key: api_key,
+      ipa: ipa_path,
+      app_identifier: ios_app_id(flavor),
+      metadata_path: File.join(project_root, "fastlane", "metadata", "ios"),
+      skip_screenshots: true,
+      submit_for_review: false,
+      force: true,
+      automatic_release: false,
+    )
+
+    maybe_upload_ios_dsym
+    notify_slack("iOS production uploaded: v#{build_name}(#{build_number})", success: true)
+  end
+end
+
+desc "Generate and optionally sync metadata-only release notes."
+lane :meta_sync do |options|
+  sync_metadata!(flavor!(options[:flavor]))
+end
+
+desc "Validate screenshot folders when present."
+lane :shots_opt do
+  screenshot_files = Dir[
+    File.join(project_root, "fastlane", "metadata", "**", "*.{png,jpg,jpeg}")
+  ]
+
+  if screenshot_files.empty?
+    UI.important("No screenshots found. shots_opt is a no-op.")
+  else
+    UI.success("Validated #{screenshot_files.size} screenshot files.")
+  end
+end
+
+error do |lane, exception|
+  notify_slack("Fastlane lane #{lane} failed: #{exception.message}", success: false)
+end

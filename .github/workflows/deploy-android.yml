@@ -1,0 +1,187 @@
+name: Deploy Android
+
+on:
+  workflow_dispatch:
+    inputs:
+      flavor:
+        description: Flavor to deploy
+        required: true
+        default: beta
+        type: choice
+        options:
+          - beta
+          - production
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-beta:
+    if: github.event_name == 'workflow_dispatch' && inputs.flavor == 'beta'
+    runs-on: ubuntu-latest
+    env:
+      FLAVOR: beta
+      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+      GOOGLE_PLAY_TRACK: ${{ secrets.GOOGLE_PLAY_TRACK }}
+      FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+      SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      - name: Write Play service account JSON
+        env:
+          ANDROID_SERVICE_ACCOUNT_JSON: ${{ secrets.ANDROID_SERVICE_ACCOUNT_JSON }}
+        run: |
+          printf '%s' "$ANDROID_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/play-service-account.json"
+          echo "ANDROID_SERVICE_ACCOUNT_JSON_PATH=$RUNNER_TEMP/play-service-account.json" >> "$GITHUB_ENV"
+
+      - name: Decode keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/upload-keystore.jks"
+          echo "KEYSTORE_PATH=$RUNNER_TEMP/upload-keystore.jks" >> "$GITHUB_ENV"
+
+      - name: Build Android app bundle
+        run: flutter build appbundle --release --flavor "$FLAVOR" -t "lib/main_${FLAVOR}.dart"
+
+      - name: Verify AAB signature
+        run: jarsigner -verify -verbose -certs "build/app/outputs/bundle/${FLAVOR}Release/app-${FLAVOR}-release.aab"
+
+      - name: Generate release notes
+        run: |
+          chmod +x fastlane/gen_release_notes
+          ./fastlane/gen_release_notes
+
+      - name: Deploy with Fastlane
+        env:
+          ANDROID_AAB_PATH: ${{ github.workspace }}/build/app/outputs/bundle/betaRelease/app-beta-release.aab
+        run: bundle exec fastlane android a_beta
+
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-beta-release
+          path: |
+            build/app/outputs/bundle/betaRelease/app-beta-release.aab
+            fastlane/metadata/android
+
+  deploy-production:
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.flavor == 'production')
+    runs-on: ubuntu-latest
+    environment: android-production
+    env:
+      FLAVOR: production
+      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+      GOOGLE_PLAY_TRACK: ${{ secrets.GOOGLE_PLAY_TRACK }}
+      FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+      SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      - name: Write Play service account JSON
+        env:
+          ANDROID_SERVICE_ACCOUNT_JSON: ${{ secrets.ANDROID_SERVICE_ACCOUNT_JSON }}
+        run: |
+          printf '%s' "$ANDROID_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/play-service-account.json"
+          echo "ANDROID_SERVICE_ACCOUNT_JSON_PATH=$RUNNER_TEMP/play-service-account.json" >> "$GITHUB_ENV"
+
+      - name: Decode keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/upload-keystore.jks"
+          echo "KEYSTORE_PATH=$RUNNER_TEMP/upload-keystore.jks" >> "$GITHUB_ENV"
+
+      - name: Build Android app bundle
+        run: flutter build appbundle --release --flavor "$FLAVOR" -t "lib/main_${FLAVOR}.dart"
+
+      - name: Verify AAB signature
+        run: jarsigner -verify -verbose -certs "build/app/outputs/bundle/${FLAVOR}Release/app-${FLAVOR}-release.aab"
+
+      - name: Generate release notes
+        run: |
+          chmod +x fastlane/gen_release_notes
+          ./fastlane/gen_release_notes
+
+      - name: Deploy with Fastlane
+        env:
+          ANDROID_AAB_PATH: ${{ github.workspace }}/build/app/outputs/bundle/productionRelease/app-production-release.aab
+        run: bundle exec fastlane android a_rel
+
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-production-release
+          path: |
+            build/app/outputs/bundle/productionRelease/app-production-release.aab
+            fastlane/metadata/android

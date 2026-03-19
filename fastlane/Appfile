@@ -1,0 +1,2 @@
+package_name(ENV.fetch("FASTLANE_ANDROID_PACKAGE_NAME", "com.example.ogra"))
+app_identifier(ENV.fetch("FASTLANE_IOS_APP_IDENTIFIER", "com.example.ogra"))

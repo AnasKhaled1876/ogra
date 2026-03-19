@@ -1,0 +1,120 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT_DIR"
+
+sanitize_mentions() {
+  ruby -e 'input = STDIN.read; print input.gsub(/@([^\s]+)/) { handle = Regexp.last_match(1).gsub(/[^A-Za-z0-9._-]/, ""); handle.empty? ? "" : "@#{handle}" }'
+}
+
+version_line="$(sed -n 's/^version:[[:space:]]*//p' pubspec.yaml | head -n 1)"
+if [[ -z "$version_line" ]]; then
+  echo "Missing version in pubspec.yaml" >&2
+  exit 1
+fi
+
+version_name="${version_line%%+*}"
+last_tag=""
+declare -a commit_titles=()
+declare -a shortlog_lines=()
+
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  last_tag="$(git describe --tags --abbrev=0 2>/dev/null || true)"
+
+  if [[ -n "$last_tag" ]]; then
+    while IFS= read -r line; do
+      commit_titles+=("$line")
+    done < <(git log --format=%s "${last_tag}..HEAD")
+
+    while IFS= read -r line; do
+      shortlog_lines+=("$line")
+    done < <(git shortlog -sne "${last_tag}..HEAD")
+  else
+    while IFS= read -r line; do
+      commit_titles+=("$line")
+    done < <(git log --format=%s)
+
+    while IFS= read -r line; do
+      shortlog_lines+=("$line")
+    done < <(git shortlog -sne HEAD)
+  fi
+fi
+
+declare -a note_lines=()
+for title in "${commit_titles[@]-}"; do
+  sanitized_title="$(printf '%s' "$title" | sanitize_mentions)"
+  [[ -z "$sanitized_title" ]] && continue
+  note_lines+=("- $sanitized_title")
+done
+
+if [[ ${#note_lines[@]} -eq 0 ]]; then
+  note_lines+=("- Maintenance and release readiness updates.")
+fi
+
+declare -a handles=()
+for line in "${shortlog_lines[@]-}"; do
+  email="$(printf '%s' "$line" | sed -n 's/.*<\([^>]*\)>.*/\1/p')"
+  raw_handle="${email%%@*}"
+  sanitized_handle="$(printf '%s' "$raw_handle" | tr '[:upper:]' '[:lower:]' | tr -cd '[:alnum:]._-')"
+  if [[ -n "$sanitized_handle" ]]; then
+    candidate_handle="@$sanitized_handle"
+    already_seen=0
+    for existing_handle in "${handles[@]-}"; do
+      if [[ "$existing_handle" == "$candidate_handle" ]]; then
+        already_seen=1
+        break
+      fi
+    done
+
+    if [[ "$already_seen" -eq 0 ]]; then
+      handles+=("$candidate_handle")
+    fi
+  fi
+done
+
+thanks_line="Thanks team — v${version_name}"
+if [[ ${#handles[@]} -gt 0 ]]; then
+  thanks_line="Thanks $(IFS=', '; echo "${handles[*]}") — v${version_name}"
+fi
+arabic_thanks_line="شكراً للفريق — v${version_name}"
+if [[ ${#handles[@]} -gt 0 ]]; then
+  arabic_thanks_line="شكراً $(IFS='، '; echo "${handles[*]}") — v${version_name}"
+fi
+
+android_en_path="fastlane/metadata/android/en-US/changelogs/${version_name}.txt"
+android_ar_path="fastlane/metadata/android/ar-EG/changelogs/${version_name}.txt"
+ios_en_path="fastlane/metadata/ios/en-US/whats_new.txt"
+ios_ar_path="fastlane/metadata/ios/ar-EG/whats_new.txt"
+
+mkdir -p \
+  "$(dirname "$android_en_path")" \
+  "$(dirname "$android_ar_path")" \
+  "$(dirname "$ios_en_path")" \
+  "$(dirname "$ios_ar_path")"
+
+{
+  echo "What's new in v${version_name}"
+  echo
+  printf '%s\n' "${note_lines[@]}"
+  echo
+  echo "$thanks_line"
+} > "$android_en_path"
+
+{
+  echo "الجديد في v${version_name}"
+  echo
+  printf '%s\n' "${note_lines[@]}"
+  echo
+  echo "$arabic_thanks_line"
+} > "$android_ar_path"
+
+cp "$android_en_path" "$ios_en_path"
+cp "$android_ar_path" "$ios_ar_path"
+
+echo "Generated release notes:"
+echo "  - $android_en_path"
+echo "  - $android_ar_path"
+echo "  - $ios_en_path"
+echo "  - $ios_ar_path"

@@ -1,0 +1,5 @@
+What's new in v1.0.0
+
+- Maintenance and release readiness updates.
+
+Thanks team — v1.0.0
