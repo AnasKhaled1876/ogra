@@ -5,10 +5,6 @@ require "base64"
 require "shellwords"
 
 APP_IDS = {
-  "beta" => {
-    android: "com.ogra.app.beta",
-    ios: "com.ogra.app.beta",
-  },
   "production" => {
     android: "com.ogra.app",
     ios: "com.ogra.app",
@@ -140,8 +136,7 @@ def ensure_ios_signing!(flavor, api_key)
 end
 
 def android_track_for(flavor)
-  return "production" if flavor == "production"
-  ENV["GOOGLE_PLAY_TRACK"].to_s.empty? ? "internal" : ENV["GOOGLE_PLAY_TRACK"]
+  "production"
 end
 
 def maybe_upload_android_crashlytics(flavor)
@@ -225,26 +220,6 @@ def notify_slack(message, success:)
 end
 
 platform :android do
-  desc "Deploy Android beta build to the internal track."
-  lane :a_beta do
-    flavor = "beta"
-    run_release_notes_generator!
-    aab_path = ensure_android_aab!(flavor)
-
-    supply(
-      aab: aab_path,
-      package_name: android_app_id(flavor),
-      track: android_track_for(flavor),
-      json_key: android_service_account_path!,
-      metadata_path: File.join(project_root, "fastlane", "metadata", "android"),
-      skip_upload_images: true,
-      skip_upload_screenshots: true,
-    )
-
-    maybe_upload_android_crashlytics(flavor)
-    notify_slack("Android beta deployed: v#{build_name}(#{build_number})", success: true)
-  end
-
   desc "Deploy Android production build to Google Play production."
   lane :a_rel do
     flavor = "production"
@@ -272,26 +247,6 @@ platform :ios do
     flavor = flavor!(options[:flavor])
     api_key = app_store_connect_api_key_from_env!
     ensure_ios_signing!(flavor, api_key)
-  end
-
-  desc "Deploy iOS beta build to TestFlight."
-  lane :i_beta do
-    flavor = "beta"
-    run_release_notes_generator!
-    api_key = app_store_connect_api_key_from_env!
-    ensure_ios_signing!(flavor, api_key)
-    ipa_path = ensure_ios_ipa!(flavor)
-
-    pilot(
-      api_key: api_key,
-      ipa: ipa_path,
-      app_identifier: ios_app_id(flavor),
-      skip_waiting_for_build_processing: true,
-      changelog: File.read(File.join(project_root, "fastlane", "metadata", "ios", "en-US", "whats_new.txt")),
-    )
-
-    maybe_upload_ios_dsym
-    notify_slack("iOS beta uploaded to TestFlight: v#{build_name}(#{build_number})", success: true)
   end
 
   desc "Deploy iOS production build to App Store Connect."

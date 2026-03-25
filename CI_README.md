@@ -2,8 +2,8 @@
 
 ## Workflows
 - `ci.yml`: runs on push and PR to `main`; installs Flutter, runs `flutter analyze` and `flutter test`, and generates release-note artifacts on push to `main`.
-- `deploy-android.yml`: manual dispatch for `beta` or `production`, and automatic production deploy on `vX.Y.Z` tags.
-- `deploy-ios.yml`: manual dispatch for `beta` or `production`, and automatic production deploy on `vX.Y.Z` tags.
+- `deploy-android.yml`: manual dispatch and automatic production deploy on `vX.Y.Z` tags.
+- `deploy-ios.yml`: manual dispatch and automatic production deploy on `vX.Y.Z` tags.
 
 ## Required Secrets
 ### Android
@@ -21,7 +21,6 @@
 - `MATCH_GIT_URL`
 
 ### Optional
-- `GOOGLE_PLAY_TRACK`
 - `IOS_EXPORT_METHOD`
 - `FIREBASE_TOKEN`
 - `SLACK_WEBHOOK`
@@ -30,13 +29,10 @@
 - Create GitHub environments `android-production` and `ios-production`.
 - Production deploys run only from:
   - tag pushes matching `vX.Y.Z`
-  - manual workflow dispatch with `production`
-- Beta deploys run only from manual workflow dispatch.
+  - manual workflow dispatch
 
 ## Flavor Mapping
-- Android `beta` -> `com.ogra.app.beta`
 - Android `production` -> `com.ogra.app`
-- iOS `beta` -> `com.ogra.app.beta`
 - iOS `production` -> `com.ogra.app`
 
 ## Release Notes
@@ -58,6 +54,7 @@
 
 ## Local Commands
 - `bundle exec fastlane lanes`
-- `bundle exec fastlane meta_sync flavor:beta`
-- `bundle exec fastlane android a_beta`
-- `bundle exec fastlane ios i_beta`
+- `bundle exec fastlane meta_sync flavor:production`
+- `bundle exec fastlane android a_rel`
+- `bundle exec fastlane ios prepare_ios_signing flavor:production`
+- `bundle exec fastlane ios i_rel`
