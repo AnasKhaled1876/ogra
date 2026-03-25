@@ -34,10 +34,10 @@
 - Beta deploys run only from manual workflow dispatch.
 
 ## Flavor Mapping
-- Android `beta` -> `com.example.ogra.beta`
-- Android `production` -> `com.example.ogra`
-- iOS `beta` -> `com.example.ogra.beta`
-- iOS `production` -> `com.example.ogra`
+- Android `beta` -> `com.ogra.app.beta`
+- Android `production` -> `com.ogra.app`
+- iOS `beta` -> `com.ogra.app.beta`
+- iOS `production` -> `com.ogra.app`
 
 ## Release Notes
 - `fastlane/gen_release_notes` reads commit titles since the previous tag.

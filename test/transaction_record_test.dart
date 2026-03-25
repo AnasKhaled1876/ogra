@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ogra/src/features/collect/domain/settlement_models.dart';
-import 'package:ogra/src/features/collect/domain/transaction_record.dart';
+import 'package:ogra/features/collect/domain/settlement_models.dart';
+import 'package:ogra/features/collect/domain/transaction_record.dart';
 
 void main() {
   test(

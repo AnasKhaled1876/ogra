@@ -30,7 +30,7 @@ val hasReleaseSigning: Boolean =
         secret("KEY_PASSWORD") != null
 
 android {
-    namespace = "com.example.ogra"
+    namespace = "com.ogra.app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -44,7 +44,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.ogra"
+        applicationId = "com.ogra.app"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

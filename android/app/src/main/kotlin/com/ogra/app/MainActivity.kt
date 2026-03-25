@@ -1,4 +1,4 @@
-package com.example.ogra
+package com.ogra.app
 
 import io.flutter.embedding.android.FlutterActivity
 

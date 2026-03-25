@@ -6,12 +6,12 @@ require "shellwords"
 
 APP_IDS = {
   "beta" => {
-    android: "com.example.ogra.beta",
-    ios: "com.example.ogra.beta",
+    android: "com.ogra.app.beta",
+    ios: "com.ogra.app.beta",
   },
   "production" => {
-    android: "com.example.ogra",
-    ios: "com.example.ogra",
+    android: "com.ogra.app",
+    ios: "com.ogra.app",
   },
 }.freeze
 

@@ -3,14 +3,14 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
-import 'package:ogra/src/engine/models.dart';
-import 'package:ogra/src/features/collect/application/collect_controller.dart';
-import 'package:ogra/src/features/collect/application/open_settlement_view.dart';
-import 'package:ogra/src/features/collect/domain/pending_commit.dart';
-import 'package:ogra/src/features/collect/domain/settlement_models.dart';
-import 'package:ogra/src/features/collect/domain/transaction_record.dart';
-import 'package:ogra/src/features/pocket/application/pocket_controller.dart';
-import 'package:ogra/src/features/settings/application/settings_controller.dart';
+import 'package:ogra/engine/models.dart';
+import 'package:ogra/features/collect/application/collect_controller.dart';
+import 'package:ogra/features/collect/application/open_settlement_view.dart';
+import 'package:ogra/features/collect/domain/pending_commit.dart';
+import 'package:ogra/features/collect/domain/settlement_models.dart';
+import 'package:ogra/features/collect/domain/transaction_record.dart';
+import 'package:ogra/features/pocket/application/pocket_controller.dart';
+import 'package:ogra/features/settings/application/settings_controller.dart';
 
 String? _hiveTestPath;
 

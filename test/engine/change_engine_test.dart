@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ogra/src/engine/change_engine.dart';
-import 'package:ogra/src/engine/engine_facade.dart';
-import 'package:ogra/src/engine/models.dart';
-import 'package:ogra/src/engine/scoring.dart';
+import 'package:ogra/engine/change_engine.dart';
+import 'package:ogra/engine/engine_facade.dart';
+import 'package:ogra/engine/models.dart';
+import 'package:ogra/engine/scoring.dart';
 
 void main() {
   final DenominationSet denomSet = DenominationSet.egpWithHalf();

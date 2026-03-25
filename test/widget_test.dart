@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
-import 'package:ogra/src/core/ui/app_theme.dart';
-import 'package:ogra/src/features/collect/presentation/collect_screen.dart';
+import 'package:ogra/core/ui/app_theme.dart';
+import 'package:ogra/features/collect/presentation/collect_screen.dart';
 
 String? _hiveTestPath;
 
