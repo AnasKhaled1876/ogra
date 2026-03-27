@@ -113,7 +113,9 @@ def ensure_ios_ipa!(flavor)
 
   export_method = ENV["IOS_EXPORT_METHOD"].to_s.empty? ? "app-store" : ENV["IOS_EXPORT_METHOD"]
   sh("cd #{escaped_project_root} && flutter pub get")
-  sh("cd #{escaped_project_root} && pod install --project-directory=ios")
+  Bundler.with_unbundled_env do
+    sh("cd #{escaped_project_root} && pod install --project-directory=ios")
+  end
   sh("cd #{escaped_project_root} && flutter build ipa --flavor #{flavor} -t lib/main_#{flavor}.dart --export-method #{export_method}")
 
   artifact = Dir[File.join(project_root, "build", "ios", "ipa", "*.ipa")].sort.last
