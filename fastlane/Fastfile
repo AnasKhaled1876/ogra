@@ -133,6 +133,15 @@ def ensure_ios_signing!(flavor, api_key)
     git_url: match_git_url,
     api_key: api_key,
   )
+
+  update_code_signing_settings(
+    use_automatic_signing: false,
+    path: File.join(project_root, "ios", "Runner.xcodeproj"),
+    team_id: ENV["sigh_#{ios_app_id(flavor)}_appstore_team-id"],
+    bundle_identifier: ios_app_id(flavor),
+    profile_name: ENV["sigh_#{ios_app_id(flavor)}_appstore_profile-name"],
+    code_sign_identity: "Apple Distribution",
+  )
 end
 
 def android_track_for(flavor)
