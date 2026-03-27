@@ -6,7 +6,5 @@ type("appstore")
 
 app_identifier("com.ogra.app")
 
-api_key_path(ENV["APP_STORE_CONNECT_API_KEY_JSON_PATH"] || File.expand_path("~/Downloads/api_key_76WZNJ7F5G.json"))
-
 # For all available options run `fastlane match --help`
 # The docs are available on https://docs.fastlane.tools/actions/match
