@@ -1,0 +1,5 @@
+الجديد في v1.0.0
+
+- Anas-Al-Musanid (@anas.khaled1892): Run pod install outside bundler in ios release lane؛ Force manual signing via update_code_signing_settings after match؛ Switch to manual signing with correct team ID for CI؛ Remove local api_key_path from Matchfile؛ Configure Android/iOS release signing and CI؛ Pin ruby version for release workflows؛ Simplify release pipeline to production-only deploys؛ Correct Cairo font asset paths casing؛ Add release pipeline and configure app identifiers for production؛ First Commit
+
+شكراً Anas-Al-Musanid (@anas.khaled1892) — v1.0.0

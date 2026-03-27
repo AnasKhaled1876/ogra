@@ -37,11 +37,15 @@
 
 ## Release Notes
 - `fastlane/gen_release_notes` reads commit titles since the previous tag.
-- It writes bilingual notes to:
+- It writes bilingual notes and store descriptions to:
   - `fastlane/metadata/android/en-US/changelogs/<version>.txt`
   - `fastlane/metadata/android/ar-EG/changelogs/<version>.txt`
+  - `fastlane/metadata/android/en-US/full_description.txt`
+  - `fastlane/metadata/android/ar-EG/full_description.txt`
   - `fastlane/metadata/ios/en-US/whats_new.txt`
-  - `fastlane/metadata/ios/ar-EG/whats_new.txt`
+  - `fastlane/metadata/ios/ar-SA/whats_new.txt`
+  - `fastlane/metadata/ios/en-US/description.txt`
+  - `fastlane/metadata/ios/ar-SA/description.txt`
 
 ## Rollback
 ### Google Play

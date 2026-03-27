@@ -1,0 +1,3 @@
+2ogra is a fast, Arabic-first fare collection assistant for shared transport. It helps drivers and collectors record passenger payments, calculate change, and track open settlements during the trip.
+
+Contributors in this release: Anas-Al-Musanid (@anas.khaled1892)

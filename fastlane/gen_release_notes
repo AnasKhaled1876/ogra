@@ -5,10 +5,6 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-sanitize_mentions() {
-  ruby -e 'input = STDIN.read; print input.gsub(/@([^\s]+)/) { handle = Regexp.last_match(1).gsub(/[^A-Za-z0-9._-]/, ""); handle.empty? ? "" : "@#{handle}" }'
-}
-
 version_line="$(sed -n 's/^version:[[:space:]]*//p' pubspec.yaml | head -n 1)"
 if [[ -z "$version_line" ]]; then
   echo "Missing version in pubspec.yaml" >&2
@@ -16,105 +12,188 @@ if [[ -z "$version_line" ]]; then
 fi
 
 version_name="${version_line%%+*}"
-last_tag=""
-declare -a commit_titles=()
-declare -a shortlog_lines=()
+ROOT_DIR="$ROOT_DIR" VERSION_NAME="$version_name" ruby <<'RUBY'
+require "fileutils"
+require "open3"
 
-if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  last_tag="$(git describe --tags --abbrev=0 2>/dev/null || true)"
+ROOT_DIR = ENV.fetch("ROOT_DIR")
+VERSION_NAME = ENV.fetch("VERSION_NAME")
 
-  if [[ -n "$last_tag" ]]; then
-    while IFS= read -r line; do
-      commit_titles+=("$line")
-    done < <(git log --format=%s "${last_tag}..HEAD")
+def git_capture(*args)
+  output, status = Open3.capture2e(*args)
+  [output, status.success?]
+end
 
-    while IFS= read -r line; do
-      shortlog_lines+=("$line")
-    done < <(git shortlog -sne "${last_tag}..HEAD")
+def in_git_repo?
+  _output, success = git_capture("git", "rev-parse", "--is-inside-work-tree")
+  success
+end
+
+def sanitize_mentions(text)
+  text.gsub(/@([^\s]+)/) do
+    handle = Regexp.last_match(1).gsub(/[^A-Za-z0-9._-]/, "")
+    handle.empty? ? "" : "@#{handle}"
+  end
+end
+
+def normalize_subject(text)
+  normalized = sanitize_mentions(text.to_s.strip)
+  normalized = normalized.sub(/\A(?:build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(?:\([^)]+\))?!?:\s*/i, "")
+  normalized = normalized.gsub(/\s+/, " ").strip
+
+  return "" if normalized.empty?
+
+  first_character = normalized[0]
+  return normalized if first_character.nil?
+
+  first_character.upcase + normalized[1..].to_s
+end
+
+def derive_handle(email)
+  return nil if email.to_s.strip.empty?
+
+  local = email.split("@").first.to_s
+  local = local.split("+", 2).last if local.include?("+")
+  handle = local.downcase.gsub(/[^a-z0-9._-]/, "")
+  handle.empty? ? nil : "@#{handle}"
+end
+
+def display_contributor(contributor)
+  contributor[:handle] ? "#{contributor[:name]} (#{contributor[:handle]})" : contributor[:name]
+end
+
+def compact_contributor_line(contributor, separator)
+  "#{display_contributor(contributor)}: #{contributor[:changes].join(separator)}"
+end
+
+def fit_lines(lines, max_length)
+  output = +""
+
+  lines.each do |line|
+    candidate = output.empty? ? line : "#{output}\n#{line}"
+    if candidate.length <= max_length
+      output = candidate
+      next
+    end
+
+    remaining = max_length - output.length
+    remaining -= 1 unless output.empty?
+    break if remaining <= 1
+
+    truncated = line[0, remaining - 1] + "…"
+    output = output.empty? ? truncated : "#{output}\n#{truncated}"
+    break
+  end
+
+  output
+end
+
+def read_template(path, fallback)
+  File.exist?(path) ? File.read(path).strip : fallback
+end
+
+contributors = []
+if in_git_repo?
+  last_tag_output, tag_found = git_capture("git", "describe", "--tags", "--abbrev=0")
+  revision_range = if tag_found && !last_tag_output.strip.empty?
+    "#{last_tag_output.strip}..HEAD"
   else
-    while IFS= read -r line; do
-      commit_titles+=("$line")
-    done < <(git log --format=%s)
+    "HEAD"
+  end
 
-    while IFS= read -r line; do
-      shortlog_lines+=("$line")
-    done < <(git shortlog -sne HEAD)
-  fi
-fi
+  commit_output, log_found = git_capture("git", "log", "--format=%an%x1f%ae%x1f%s", revision_range)
+  if log_found
+    contributor_index = {}
 
-declare -a note_lines=()
-for title in "${commit_titles[@]-}"; do
-  sanitized_title="$(printf '%s' "$title" | sanitize_mentions)"
-  [[ -z "$sanitized_title" ]] && continue
-  note_lines+=("- $sanitized_title")
-done
+    commit_output.each_line do |line|
+      name, email, subject = line.strip.split("\u001f", 3)
+      next if subject.to_s.strip.empty?
 
-if [[ ${#note_lines[@]} -eq 0 ]]; then
-  note_lines+=("- Maintenance and release readiness updates.")
-fi
+      normalized_subject = normalize_subject(subject)
+      next if normalized_subject.empty?
 
-declare -a handles=()
-for line in "${shortlog_lines[@]-}"; do
-  email="$(printf '%s' "$line" | sed -n 's/.*<\([^>]*\)>.*/\1/p')"
-  raw_handle="${email%%@*}"
-  sanitized_handle="$(printf '%s' "$raw_handle" | tr '[:upper:]' '[:lower:]' | tr -cd '[:alnum:]._-')"
-  if [[ -n "$sanitized_handle" ]]; then
-    candidate_handle="@$sanitized_handle"
-    already_seen=0
-    for existing_handle in "${handles[@]-}"; do
-      if [[ "$existing_handle" == "$candidate_handle" ]]; then
-        already_seen=1
-        break
-      fi
-    done
+      key = "#{name}\u0000#{email}"
+      entry = if contributor_index.key?(key)
+        contributors[contributor_index[key]]
+      else
+        contributor_index[key] = contributors.length
+        contributor = {
+          name: name.to_s.strip.empty? ? "Team" : name.strip,
+          handle: derive_handle(email),
+          changes: [],
+        }
+        contributors << contributor
+        contributor
+      end
 
-    if [[ "$already_seen" -eq 0 ]]; then
-      handles+=("$candidate_handle")
-    fi
-  fi
-done
+      entry[:changes] << normalized_subject unless entry[:changes].include?(normalized_subject)
+    end
+  end
+end
 
-thanks_line="Thanks team — v${version_name}"
-if [[ ${#handles[@]} -gt 0 ]]; then
-  thanks_line="Thanks $(IFS=', '; echo "${handles[*]}") — v${version_name}"
-fi
-arabic_thanks_line="شكراً للفريق — v${version_name}"
-if [[ ${#handles[@]} -gt 0 ]]; then
-  arabic_thanks_line="شكراً $(IFS='، '; echo "${handles[*]}") — v${version_name}"
-fi
+if contributors.empty?
+  contributors << {
+    name: "Team",
+    handle: nil,
+    changes: ["Maintenance and release readiness updates."],
+  }
+end
 
-android_en_path="fastlane/metadata/android/en-US/changelogs/${version_name}.txt"
-android_ar_path="fastlane/metadata/android/ar-EG/changelogs/${version_name}.txt"
-ios_en_path="fastlane/metadata/ios/en-US/whats_new.txt"
-ios_ar_path="fastlane/metadata/ios/ar-EG/whats_new.txt"
+android_en_lines = contributors.map { |contributor| "- #{compact_contributor_line(contributor, '; ')}" }
+android_ar_lines = contributors.map { |contributor| "- #{compact_contributor_line(contributor, '؛ ')}" }
 
-mkdir -p \
-  "$(dirname "$android_en_path")" \
-  "$(dirname "$android_ar_path")" \
-  "$(dirname "$ios_en_path")" \
-  "$(dirname "$ios_ar_path")"
+contributor_labels = contributors.map { |contributor| display_contributor(contributor) }
+ios_en_lines = ["What's new in v#{VERSION_NAME}", ""]
+ios_en_lines.concat(android_en_lines)
+ios_en_lines << ""
+ios_en_lines << "Thanks #{contributor_labels.join(', ')} — v#{VERSION_NAME}"
 
-{
-  echo "What's new in v${version_name}"
-  echo
-  printf '%s\n' "${note_lines[@]}"
-  echo
-  echo "$thanks_line"
-} > "$android_en_path"
+ios_ar_lines = ["الجديد في v#{VERSION_NAME}", ""]
+ios_ar_lines.concat(android_ar_lines)
+ios_ar_lines << ""
+ios_ar_lines << "شكراً #{contributor_labels.join('، ')} — v#{VERSION_NAME}"
 
-{
-  echo "الجديد في v${version_name}"
-  echo
-  printf '%s\n' "${note_lines[@]}"
-  echo
-  echo "$arabic_thanks_line"
-} > "$android_ar_path"
+description_en_template = read_template(
+  File.join(ROOT_DIR, "fastlane", "templates", "store_description.en-US.txt"),
+  "2ogra is a fast, Arabic-first fare collection assistant for shared transport. It helps drivers and collectors record passenger payments, calculate change, and track open settlements during the trip."
+)
+description_ar_template = read_template(
+  File.join(ROOT_DIR, "fastlane", "templates", "store_description.ar.txt"),
+  "أجرة هو مساعد سريع لتحصيل الأجرة في المواصلات المشتركة، مصمم أولاً للعربية. يساعد السائق أو المحصل على تسجيل المدفوعات، حساب الباقي، ومتابعة التسويات المفتوحة أثناء الرحلة."
+)
 
-cp "$android_en_path" "$ios_en_path"
-cp "$android_ar_path" "$ios_ar_path"
+description_en_lines = [description_en_template, "", "Contributors in this release: #{contributor_labels.join(', ')}"]
+description_ar_lines = [description_ar_template, "", "المساهمون في هذا الإصدار: #{contributor_labels.join('، ')}"]
 
-echo "Generated release notes:"
-echo "  - $android_en_path"
-echo "  - $android_ar_path"
-echo "  - $ios_en_path"
-echo "  - $ios_ar_path"
+android_en_path = File.join(ROOT_DIR, "fastlane", "metadata", "android", "en-US", "changelogs", "#{VERSION_NAME}.txt")
+android_ar_path = File.join(ROOT_DIR, "fastlane", "metadata", "android", "ar-EG", "changelogs", "#{VERSION_NAME}.txt")
+android_en_description_path = File.join(ROOT_DIR, "fastlane", "metadata", "android", "en-US", "full_description.txt")
+android_ar_description_path = File.join(ROOT_DIR, "fastlane", "metadata", "android", "ar-EG", "full_description.txt")
+ios_en_path = File.join(ROOT_DIR, "fastlane", "metadata", "ios", "en-US", "whats_new.txt")
+ios_ar_path = File.join(ROOT_DIR, "fastlane", "metadata", "ios", "ar-SA", "whats_new.txt")
+ios_en_description_path = File.join(ROOT_DIR, "fastlane", "metadata", "ios", "en-US", "description.txt")
+ios_ar_description_path = File.join(ROOT_DIR, "fastlane", "metadata", "ios", "ar-SA", "description.txt")
+
+[android_en_path, android_ar_path, android_en_description_path, android_ar_description_path, ios_en_path, ios_ar_path, ios_en_description_path, ios_ar_description_path].each do |path|
+  FileUtils.mkdir_p(File.dirname(path))
+end
+
+File.write(android_en_path, fit_lines(android_en_lines, 500) + "\n")
+File.write(android_ar_path, fit_lines(android_ar_lines, 500) + "\n")
+File.write(android_en_description_path, fit_lines(description_en_lines, 4000) + "\n")
+File.write(android_ar_description_path, fit_lines(description_ar_lines, 4000) + "\n")
+File.write(ios_en_path, fit_lines(ios_en_lines, 4000) + "\n")
+File.write(ios_ar_path, fit_lines(ios_ar_lines, 4000) + "\n")
+File.write(ios_en_description_path, fit_lines(description_en_lines, 4000) + "\n")
+File.write(ios_ar_description_path, fit_lines(description_ar_lines, 4000) + "\n")
+
+puts "Generated release notes:"
+puts "  - #{android_en_path.sub(ROOT_DIR + '/', '')}"
+puts "  - #{android_ar_path.sub(ROOT_DIR + '/', '')}"
+puts "  - #{android_en_description_path.sub(ROOT_DIR + '/', '')}"
+puts "  - #{android_ar_description_path.sub(ROOT_DIR + '/', '')}"
+puts "  - #{ios_en_path.sub(ROOT_DIR + '/', '')}"
+puts "  - #{ios_ar_path.sub(ROOT_DIR + '/', '')}"
+puts "  - #{ios_en_description_path.sub(ROOT_DIR + '/', '')}"
+puts "  - #{ios_ar_description_path.sub(ROOT_DIR + '/', '')}"
+RUBY

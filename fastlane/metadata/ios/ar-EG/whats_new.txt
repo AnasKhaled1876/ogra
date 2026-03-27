@@ -1,5 +1,0 @@
-الجديد في v1.0.0
-
-- Maintenance and release readiness updates.
-
-شكراً للفريق — v1.0.0
