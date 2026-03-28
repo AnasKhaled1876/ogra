@@ -45,11 +45,24 @@ def pubspec_version
 end
 
 def build_name
+  override = ENV["APP_BUILD_NAME"].to_s
+  return override unless override.empty?
+
   pubspec_version.split("+").first
 end
 
 def build_number
+  override = ENV["APP_BUILD_NUMBER"].to_s
+  return override unless override.empty?
+
   pubspec_version.split("+")[1] || "1"
+end
+
+def flutter_build_version_args
+  args = []
+  args << "--build-name #{Shellwords.escape(build_name)}" unless build_name.to_s.empty?
+  args << "--build-number #{Shellwords.escape(build_number)}" unless build_number.to_s.empty?
+  args.join(" ")
 end
 
 def run_release_notes_generator!
@@ -92,7 +105,8 @@ def ensure_android_aab!(flavor)
   return provided if !provided.empty? && File.exist?(provided)
 
   sh("cd #{escaped_project_root} && flutter pub get")
-  sh("cd #{escaped_project_root} && flutter build appbundle --release --flavor #{flavor} -t lib/main_#{flavor}.dart")
+  version_args = flutter_build_version_args
+  sh("cd #{escaped_project_root} && flutter build appbundle --release --flavor #{flavor} -t lib/main_#{flavor}.dart #{version_args}")
 
   artifact = File.join(
     project_root,
@@ -112,11 +126,12 @@ def ensure_ios_ipa!(flavor)
   return provided if !provided.empty? && File.exist?(provided)
 
   export_method = ENV["IOS_EXPORT_METHOD"].to_s.empty? ? "app-store" : ENV["IOS_EXPORT_METHOD"]
+  version_args = flutter_build_version_args
   sh("cd #{escaped_project_root} && flutter pub get")
   Bundler.with_unbundled_env do
     sh("cd #{escaped_project_root} && pod install --project-directory=ios")
   end
-  sh("cd #{escaped_project_root} && flutter build ipa --flavor #{flavor} -t lib/main_#{flavor}.dart --export-method #{export_method}")
+  sh("cd #{escaped_project_root} && flutter build ipa --flavor #{flavor} -t lib/main_#{flavor}.dart --export-method #{export_method} #{version_args}")
 
   artifact = Dir[File.join(project_root, "build", "ios", "ipa", "*.ipa")].sort.last
   UI.user_error!("No IPA found in build/ios/ipa.") if artifact.nil?

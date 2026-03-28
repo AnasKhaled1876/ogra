@@ -84,11 +84,17 @@ jobs:
           printf '%s' "$APP_STORE_CONNECT_API_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
           echo "APP_STORE_CONNECT_API_KEY_PATH=$RUNNER_TEMP/AuthKey.p8" >> "$GITHUB_ENV"
 
+      - name: Compute release build number
+        run: |
+          BUILD_NUMBER=$((GITHUB_RUN_NUMBER * 100 + GITHUB_RUN_ATTEMPT))
+          echo "APP_BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
+          echo "::notice::Using iOS build number $BUILD_NUMBER"
+
       - name: Prepare signing with match
         run: bundle exec fastlane ios prepare_ios_signing flavor:$FLAVOR
 
       - name: Build IPA
-        run: flutter build ipa --flavor "$FLAVOR" -t "lib/main_${FLAVOR}.dart" --export-method "${IOS_EXPORT_METHOD:-app-store}"
+        run: flutter build ipa --flavor "$FLAVOR" -t "lib/main_${FLAVOR}.dart" --export-method "${IOS_EXPORT_METHOD:-app-store}" --build-number "$APP_BUILD_NUMBER"
 
       - name: Locate IPA
         run: |

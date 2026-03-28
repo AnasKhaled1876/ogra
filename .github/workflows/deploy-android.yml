@@ -88,8 +88,14 @@ jobs:
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/upload-keystore.jks"
           echo "KEYSTORE_PATH=$RUNNER_TEMP/upload-keystore.jks" >> "$GITHUB_ENV"
 
+      - name: Compute release build number
+        run: |
+          BUILD_NUMBER=$((GITHUB_RUN_NUMBER * 100 + GITHUB_RUN_ATTEMPT))
+          echo "APP_BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
+          echo "::notice::Using Android build number $BUILD_NUMBER"
+
       - name: Build Android app bundle
-        run: flutter build appbundle --release --flavor "$FLAVOR" -t "lib/main_${FLAVOR}.dart"
+        run: flutter build appbundle --release --flavor "$FLAVOR" -t "lib/main_${FLAVOR}.dart" --build-number "$APP_BUILD_NUMBER"
 
       - name: Verify AAB signature
         run: jarsigner -verify -verbose -certs "build/app/outputs/bundle/${FLAVOR}Release/app-${FLAVOR}-release.aab"
