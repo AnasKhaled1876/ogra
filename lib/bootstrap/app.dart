@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/ui/app_theme.dart';
-import '../features/shell/presentation/app_shell.dart';
+import '../features/splash/presentation/splash_screen.dart';
 
 class OgraApp extends StatelessWidget {
   const OgraApp({super.key});
@@ -18,7 +18,7 @@ class OgraApp extends StatelessWidget {
           child: child ?? const SizedBox.shrink(),
         );
       },
-      home: const AppShell(),
+      home: const SplashScreen(),
     );
   }
 }
