@@ -79,6 +79,16 @@ Future<ui.Image> _renderMasterIcon() async {
     const Radius.circular(232),
   );
 
+  canvas.drawRect(
+    rect,
+    Paint()
+      ..shader = ui.Gradient.linear(
+        const Offset(0, 0),
+        Offset(size.toDouble(), size.toDouble()),
+        const <Color>[bgStart, bgEnd],
+      ),
+  );
+
   canvas.drawRRect(
     background,
     Paint()
@@ -175,4 +185,49 @@ Future<void> _writeImage(ui.Image image, String path) async {
   final file = File(path);
   file.parent.createSync(recursive: true);
   file.writeAsBytesSync(byteData.buffer.asUint8List(), flush: true);
+
+  if (path.contains('ios/Runner/Assets.xcassets/AppIcon.appiconset/')) {
+    _stripAlphaChannel(path);
+  }
+}
+
+void _stripAlphaChannel(String path) {
+  final tempDir = Directory.systemTemp.createTempSync('ogra-icon-strip-');
+  final jpegPath = '${tempDir.path}/icon.jpg';
+
+  final toJpeg = Process.runSync(
+    '/usr/bin/sips',
+    <String>[
+      '-s',
+      'format',
+      'jpeg',
+      '-s',
+      'formatOptions',
+      'best',
+      path,
+      '--out',
+      jpegPath,
+    ],
+  );
+  if (toJpeg.exitCode != 0) {
+    tempDir.deleteSync(recursive: true);
+    throw StateError('Failed converting $path to JPEG: ${toJpeg.stderr}');
+  }
+
+  final backToPng = Process.runSync(
+    '/usr/bin/sips',
+    <String>[
+      '-s',
+      'format',
+      'png',
+      jpegPath,
+      '--out',
+      path,
+    ],
+  );
+  tempDir.deleteSync(recursive: true);
+
+  if (backToPng.exitCode != 0) {
+    throw StateError('Failed converting $path back to PNG: ${backToPng.stderr}');
+  }
 }
