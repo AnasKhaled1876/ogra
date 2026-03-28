@@ -100,6 +100,13 @@ def app_store_connect_api_key_from_env!
   )
 end
 
+def without_app_store_connect_api_key_path
+  original = ENV.delete("APP_STORE_CONNECT_API_KEY_PATH")
+  yield
+ensure
+  ENV["APP_STORE_CONNECT_API_KEY_PATH"] = original unless original.nil?
+end
+
 def ensure_android_aab!(flavor)
   provided = ENV["ANDROID_AAB_PATH"].to_s
   return provided if !provided.empty? && File.exist?(provided)
@@ -220,17 +227,20 @@ def sync_metadata!(flavor)
   end
 
   if !ENV["APP_STORE_CONNECT_API_KEY_ID"].to_s.empty?
-    deliver(
-      api_key: app_store_connect_api_key_from_env!,
-      app_identifier: ios_app_id(flavor),
-      metadata_path: File.join(project_root, "fastlane", "metadata", "ios"),
-      skip_binary_upload: true,
-      skip_screenshots: true,
-      precheck_include_in_app_purchases: false,
-      submit_for_review: false,
-      force: true,
-      automatic_release: false,
-    )
+    api_key = app_store_connect_api_key_from_env!
+    without_app_store_connect_api_key_path do
+      deliver(
+        api_key: api_key,
+        app_identifier: ios_app_id(flavor),
+        metadata_path: File.join(project_root, "fastlane", "metadata", "ios"),
+        skip_binary_upload: true,
+        skip_screenshots: true,
+        precheck_include_in_app_purchases: false,
+        submit_for_review: false,
+        force: true,
+        automatic_release: false,
+      )
+    end
   else
     UI.important("Skipping iOS metadata sync: missing App Store Connect API key secret.")
   end
@@ -284,17 +294,19 @@ platform :ios do
     ensure_ios_signing!(flavor, api_key)
     ipa_path = ensure_ios_ipa!(flavor)
 
-    deliver(
-      api_key: api_key,
-      ipa: ipa_path,
-      app_identifier: ios_app_id(flavor),
-      metadata_path: File.join(project_root, "fastlane", "metadata", "ios"),
-      skip_screenshots: true,
-      precheck_include_in_app_purchases: false,
-      submit_for_review: false,
-      force: true,
-      automatic_release: false,
-    )
+    without_app_store_connect_api_key_path do
+      deliver(
+        api_key: api_key,
+        ipa: ipa_path,
+        app_identifier: ios_app_id(flavor),
+        metadata_path: File.join(project_root, "fastlane", "metadata", "ios"),
+        skip_screenshots: true,
+        precheck_include_in_app_purchases: false,
+        submit_for_review: false,
+        force: true,
+        automatic_release: false,
+      )
+    end
 
     maybe_upload_ios_dsym
     notify_slack("iOS production uploaded: v#{build_name}(#{build_number})", success: true)
