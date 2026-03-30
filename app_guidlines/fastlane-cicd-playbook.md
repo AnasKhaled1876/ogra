@@ -295,13 +295,13 @@ Do not assume Android and iOS support the same locale folder names.
 
 Example we hit:
 
-- Android accepted `ar-EG`
-- App Store Connect rejected `ar-EG`
-- iOS needed `ar-SA`
+- Google Play rejected `ar-EG`
+- Android store metadata needed `ar`
+- App Store Connect needed `ar-SA`
 
 Rule:
 
-- verify iOS metadata locale names against App Store Connect accepted locale codes
+- verify Android and iOS metadata locale names against each store's accepted locale codes
 
 ---
 

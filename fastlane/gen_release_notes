@@ -166,9 +166,9 @@ description_en_lines = [description_en_template, "", "Contributors in this relea
 description_ar_lines = [description_ar_template, "", "المساهمون في هذا الإصدار: #{contributor_labels.join('، ')}"]
 
 android_en_path = File.join(ROOT_DIR, "fastlane", "metadata", "android", "en-US", "changelogs", "#{VERSION_NAME}.txt")
-android_ar_path = File.join(ROOT_DIR, "fastlane", "metadata", "android", "ar-EG", "changelogs", "#{VERSION_NAME}.txt")
+android_ar_path = File.join(ROOT_DIR, "fastlane", "metadata", "android", "ar", "changelogs", "#{VERSION_NAME}.txt")
 android_en_description_path = File.join(ROOT_DIR, "fastlane", "metadata", "android", "en-US", "full_description.txt")
-android_ar_description_path = File.join(ROOT_DIR, "fastlane", "metadata", "android", "ar-EG", "full_description.txt")
+android_ar_description_path = File.join(ROOT_DIR, "fastlane", "metadata", "android", "ar", "full_description.txt")
 ios_en_path = File.join(ROOT_DIR, "fastlane", "metadata", "ios", "en-US", "whats_new.txt")
 ios_ar_path = File.join(ROOT_DIR, "fastlane", "metadata", "ios", "ar-SA", "whats_new.txt")
 ios_en_description_path = File.join(ROOT_DIR, "fastlane", "metadata", "ios", "en-US", "description.txt")
