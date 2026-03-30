@@ -98,6 +98,12 @@ def read_template(path, fallback)
   File.exist?(path) ? File.read(path).strip : fallback
 end
 
+def write_text(path, content, trailing_newline: true)
+  body = content.to_s.rstrip
+  body += "\n" if trailing_newline
+  File.write(path, body)
+end
+
 contributors = []
 if in_git_repo?
   last_tag_output, tag_found = git_capture("git", "describe", "--tags", "--abbrev=0")
@@ -204,18 +210,18 @@ ios_ar_description_path = File.join(ROOT_DIR, "fastlane", "metadata", "ios", "ar
   FileUtils.mkdir_p(File.dirname(path))
 end
 
-File.write(android_en_path, fit_lines(android_en_lines, 500) + "\n")
-File.write(android_ar_path, fit_lines(android_ar_lines, 500) + "\n")
-File.write(android_en_description_path, fit_lines(description_en_lines, 4000) + "\n")
-File.write(android_ar_description_path, fit_lines(description_ar_lines, 4000) + "\n")
-File.write(android_en_title_path, fit_lines([title_en_template], 50) + "\n")
-File.write(android_ar_title_path, fit_lines([title_ar_template], 50) + "\n")
-File.write(android_en_short_description_path, fit_lines([short_description_en_template], 80) + "\n")
-File.write(android_ar_short_description_path, fit_lines([short_description_ar_template], 80) + "\n")
-File.write(ios_en_path, fit_lines(ios_en_lines, 4000) + "\n")
-File.write(ios_ar_path, fit_lines(ios_ar_lines, 4000) + "\n")
-File.write(ios_en_description_path, fit_lines(description_en_lines, 4000) + "\n")
-File.write(ios_ar_description_path, fit_lines(description_ar_lines, 4000) + "\n")
+write_text(android_en_path, fit_lines(android_en_lines, 500), trailing_newline: false)
+write_text(android_ar_path, fit_lines(android_ar_lines, 500), trailing_newline: false)
+write_text(android_en_description_path, fit_lines(description_en_lines, 4000), trailing_newline: false)
+write_text(android_ar_description_path, fit_lines(description_ar_lines, 4000), trailing_newline: false)
+write_text(android_en_title_path, fit_lines([title_en_template], 50), trailing_newline: false)
+write_text(android_ar_title_path, fit_lines([title_ar_template], 50), trailing_newline: false)
+write_text(android_en_short_description_path, fit_lines([short_description_en_template], 80), trailing_newline: false)
+write_text(android_ar_short_description_path, fit_lines([short_description_ar_template], 80), trailing_newline: false)
+write_text(ios_en_path, fit_lines(ios_en_lines, 4000))
+write_text(ios_ar_path, fit_lines(ios_ar_lines, 4000))
+write_text(ios_en_description_path, fit_lines(description_en_lines, 4000))
+write_text(ios_ar_description_path, fit_lines(description_ar_lines, 4000))
 
 puts "Generated release notes:"
 puts "  - #{android_en_path.sub(ROOT_DIR + '/', '')}"
