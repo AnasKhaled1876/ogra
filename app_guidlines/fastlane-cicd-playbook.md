@@ -286,6 +286,9 @@ Recommended behavior:
 - strip commit prefixes like `fix:` / `feat:` / `chore:`
 - generate:
   - Android changelogs
+  - Android `title.txt`
+  - Android `short_description.txt`
+  - Android `full_description.txt`
   - iOS `whats_new`
   - optional store descriptions with contributor appendix
 
@@ -441,6 +444,33 @@ Problem:
 Fix:
 
 - use a valid iOS App Store locale, e.g. `ar-SA`
+
+### 10.10b Google Play listing metadata incomplete
+
+Problem:
+
+- `supply` uploaded Android metadata but Play rejected the listing because the locale had no `title`
+
+Fix:
+
+- generate all required Android store-listing files for each locale:
+  - `title.txt`
+  - `short_description.txt`
+  - `full_description.txt`
+
+Do not assume `full_description.txt` alone is enough.
+
+### 10.10c Android changelogs named by marketing version instead of version code
+
+Problem:
+
+- `supply` looked for changelogs like `601.txt`
+- the generator wrote `1.0.0.txt`
+
+Fix:
+
+- for Android, write changelog files using the build/version code that Play receives
+- in CI, that should follow the computed `APP_BUILD_NUMBER`
 
 ### 10.11 First App Store version may fail in metadata/review flow
 

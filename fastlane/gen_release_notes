@@ -12,12 +12,18 @@ if [[ -z "$version_line" ]]; then
 fi
 
 version_name="${version_line%%+*}"
-ROOT_DIR="$ROOT_DIR" VERSION_NAME="$version_name" ruby <<'RUBY'
+version_code_default="${version_line#*+}"
+if [[ "$version_code_default" == "$version_line" ]]; then
+  version_code_default="1"
+fi
+build_number="${APP_BUILD_NUMBER:-$version_code_default}"
+ROOT_DIR="$ROOT_DIR" VERSION_NAME="$version_name" BUILD_NUMBER="$build_number" ruby <<'RUBY'
 require "fileutils"
 require "open3"
 
 ROOT_DIR = ENV.fetch("ROOT_DIR")
 VERSION_NAME = ENV.fetch("VERSION_NAME")
+BUILD_NUMBER = ENV.fetch("BUILD_NUMBER")
 
 def git_capture(*args)
   output, status = Open3.capture2e(*args)
@@ -161,20 +167,40 @@ description_ar_template = read_template(
   File.join(ROOT_DIR, "fastlane", "templates", "store_description.ar.txt"),
   "أجرة هو مساعد سريع لتحصيل الأجرة في المواصلات المشتركة، مصمم أولاً للعربية. يساعد السائق أو المحصل على تسجيل المدفوعات، حساب الباقي، ومتابعة التسويات المفتوحة أثناء الرحلة."
 )
+title_en_template = read_template(
+  File.join(ROOT_DIR, "fastlane", "templates", "store_title.en-US.txt"),
+  "2ogra"
+)
+title_ar_template = read_template(
+  File.join(ROOT_DIR, "fastlane", "templates", "store_title.ar.txt"),
+  "أجرة"
+)
+short_description_en_template = read_template(
+  File.join(ROOT_DIR, "fastlane", "templates", "store_short_description.en-US.txt"),
+  "Arabic-first fare collection for shared transport."
+)
+short_description_ar_template = read_template(
+  File.join(ROOT_DIR, "fastlane", "templates", "store_short_description.ar.txt"),
+  "تحصيل أجرة سريع وسهل للمواصلات المشتركة."
+)
 
 description_en_lines = [description_en_template, "", "Contributors in this release: #{contributor_labels.join(', ')}"]
 description_ar_lines = [description_ar_template, "", "المساهمون في هذا الإصدار: #{contributor_labels.join('، ')}"]
 
-android_en_path = File.join(ROOT_DIR, "fastlane", "metadata", "android", "en-US", "changelogs", "#{VERSION_NAME}.txt")
-android_ar_path = File.join(ROOT_DIR, "fastlane", "metadata", "android", "ar", "changelogs", "#{VERSION_NAME}.txt")
+android_en_path = File.join(ROOT_DIR, "fastlane", "metadata", "android", "en-US", "changelogs", "#{BUILD_NUMBER}.txt")
+android_ar_path = File.join(ROOT_DIR, "fastlane", "metadata", "android", "ar", "changelogs", "#{BUILD_NUMBER}.txt")
 android_en_description_path = File.join(ROOT_DIR, "fastlane", "metadata", "android", "en-US", "full_description.txt")
 android_ar_description_path = File.join(ROOT_DIR, "fastlane", "metadata", "android", "ar", "full_description.txt")
+android_en_title_path = File.join(ROOT_DIR, "fastlane", "metadata", "android", "en-US", "title.txt")
+android_ar_title_path = File.join(ROOT_DIR, "fastlane", "metadata", "android", "ar", "title.txt")
+android_en_short_description_path = File.join(ROOT_DIR, "fastlane", "metadata", "android", "en-US", "short_description.txt")
+android_ar_short_description_path = File.join(ROOT_DIR, "fastlane", "metadata", "android", "ar", "short_description.txt")
 ios_en_path = File.join(ROOT_DIR, "fastlane", "metadata", "ios", "en-US", "whats_new.txt")
 ios_ar_path = File.join(ROOT_DIR, "fastlane", "metadata", "ios", "ar-SA", "whats_new.txt")
 ios_en_description_path = File.join(ROOT_DIR, "fastlane", "metadata", "ios", "en-US", "description.txt")
 ios_ar_description_path = File.join(ROOT_DIR, "fastlane", "metadata", "ios", "ar-SA", "description.txt")
 
-[android_en_path, android_ar_path, android_en_description_path, android_ar_description_path, ios_en_path, ios_ar_path, ios_en_description_path, ios_ar_description_path].each do |path|
+[android_en_path, android_ar_path, android_en_description_path, android_ar_description_path, android_en_title_path, android_ar_title_path, android_en_short_description_path, android_ar_short_description_path, ios_en_path, ios_ar_path, ios_en_description_path, ios_ar_description_path].each do |path|
   FileUtils.mkdir_p(File.dirname(path))
 end
 
@@ -182,6 +208,10 @@ File.write(android_en_path, fit_lines(android_en_lines, 500) + "\n")
 File.write(android_ar_path, fit_lines(android_ar_lines, 500) + "\n")
 File.write(android_en_description_path, fit_lines(description_en_lines, 4000) + "\n")
 File.write(android_ar_description_path, fit_lines(description_ar_lines, 4000) + "\n")
+File.write(android_en_title_path, fit_lines([title_en_template], 50) + "\n")
+File.write(android_ar_title_path, fit_lines([title_ar_template], 50) + "\n")
+File.write(android_en_short_description_path, fit_lines([short_description_en_template], 80) + "\n")
+File.write(android_ar_short_description_path, fit_lines([short_description_ar_template], 80) + "\n")
 File.write(ios_en_path, fit_lines(ios_en_lines, 4000) + "\n")
 File.write(ios_ar_path, fit_lines(ios_ar_lines, 4000) + "\n")
 File.write(ios_en_description_path, fit_lines(description_en_lines, 4000) + "\n")
@@ -192,6 +222,10 @@ puts "  - #{android_en_path.sub(ROOT_DIR + '/', '')}"
 puts "  - #{android_ar_path.sub(ROOT_DIR + '/', '')}"
 puts "  - #{android_en_description_path.sub(ROOT_DIR + '/', '')}"
 puts "  - #{android_ar_description_path.sub(ROOT_DIR + '/', '')}"
+puts "  - #{android_en_title_path.sub(ROOT_DIR + '/', '')}"
+puts "  - #{android_ar_title_path.sub(ROOT_DIR + '/', '')}"
+puts "  - #{android_en_short_description_path.sub(ROOT_DIR + '/', '')}"
+puts "  - #{android_ar_short_description_path.sub(ROOT_DIR + '/', '')}"
 puts "  - #{ios_en_path.sub(ROOT_DIR + '/', '')}"
 puts "  - #{ios_ar_path.sub(ROOT_DIR + '/', '')}"
 puts "  - #{ios_en_description_path.sub(ROOT_DIR + '/', '')}"
