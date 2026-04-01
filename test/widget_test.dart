@@ -62,7 +62,8 @@ void main() {
     await tester.pumpWidget(_testApp(const CollectScreen()));
     await tester.pumpAndSettle();
 
-    expect(find.byType(FloatingActionButton), findsOneWidget);
+    // Primary action button (bottom bar — no FAB in current design)
+    expect(find.widgetWithText(ElevatedButton, 'عملية جديدة'), findsOneWidget);
     expect(find.byTooltip('الفكة'), findsOneWidget);
     expect(find.text('عمليات الرحلة'), findsOneWidget);
   });
@@ -87,23 +88,29 @@ void main() {
       await tester.pumpWidget(_testApp(const CollectScreen()));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byType(FloatingActionButton));
+      // Open the transaction sheet via the bottom action bar button
+      await tester.tap(find.widgetWithText(ElevatedButton, 'عملية جديدة'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('2').first);
+      // Select 2 riders — default fare is 15 EGP, so total due = 30 EGP
+      await tester.tap(find.text('2'));
       await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField).last, '20, 10');
-      await tester.pump(const Duration(milliseconds: 350));
-      await tester.pump();
 
+      // Tap denomination buttons: 20 EGP + 10 EGP = 30 EGP (exact)
+      await tester.tap(find.text('20'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('10'));
+      await tester.pumpAndSettle();
+
+      // Result card: المطلوب and المدفوع both show 30 جنيه
       expect(find.textContaining('30 جنيه'), findsWidgets);
-      expect(find.text('بدون صرف.'), findsOneWidget);
+      // No change needed — exact payment
+      expect(find.text('بدون صرف'), findsOneWidget);
 
+      // Confirm button must be enabled
       final Finder confirmButton = find.widgetWithText(ElevatedButton, 'تأكيد');
       await tester.ensureVisible(confirmButton);
-      final ElevatedButton button = tester.widget<ElevatedButton>(
-        confirmButton,
-      );
+      final ElevatedButton button = tester.widget<ElevatedButton>(confirmButton);
       expect(button.onPressed, isNotNull);
     },
   );
