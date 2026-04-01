@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "166280631709",
+    "project_id": "ogra-5bdbf",
+    "storage_bucket": "ogra-5bdbf.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:166280631709:android:9963a331d9bbc783ce0b74",
+        "android_client_info": {
+          "package_name": "com.ogra.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC-w7WLCDIT9vws96BXTQy5RrgdBvVfSek"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -3,6 +3,8 @@ import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive/hive.dart';
 
+import '../../../core/analytics/analytics_provider.dart';
+import '../../../core/analytics/analytics_service.dart';
 import '../../../core/utils/money_formatter.dart';
 import '../../../engine/engine_facade.dart';
 import '../../../engine/models.dart' as engine;
@@ -187,6 +189,8 @@ class CollectController extends Notifier<CollectState> {
   late final PendingCommitRepo _pendingCommitRepo;
   bool _recoveryScheduled = false;
 
+  AnalyticsService get _analytics => ref.read(analyticsProvider);
+
   @override
   CollectState build() {
     _repo = ref.read(transactionRepoProvider);
@@ -201,7 +205,12 @@ class CollectController extends Notifier<CollectState> {
   }
 
   void setFareMinor(int fareMinor) {
-    state = state.copyWith(fareMinor: max(100, fareMinor));
+    final int oldFare = state.fareMinor;
+    final int newFare = max(100, fareMinor);
+    state = state.copyWith(fareMinor: newFare);
+    if (oldFare != newFare) {
+      _analytics.logFareAdjusted(oldFareMinor: oldFare, newFareMinor: newFare);
+    }
   }
 
   void adjustFareMinor(int deltaMinor) {
@@ -218,6 +227,7 @@ class CollectController extends Notifier<CollectState> {
 
   void startDraft() {
     state = state.copyWith(draft: TransactionDraft.initial());
+    _analytics.logSheetOpened();
   }
 
   void setDraftRidersCount(int count) {
@@ -321,6 +331,25 @@ class CollectController extends Notifier<CollectState> {
     );
     if (!saved) {
       return false;
+    }
+
+    _analytics.logTransactionCompleted(
+      ridersCount: draft.ridersCount,
+      fareMinor: state.fareMinor,
+      amountPaidMinor: draft.amountPaidMinor,
+      changeDueMinor: result.changeDueMinor,
+      isFeasible: result.feasible,
+      pocketModeEnabled: pocketModeEnabled,
+      denominationsMinor: draft.receivedDenominationsMinor,
+      changePlanItems: result.bestChangePlanItems,
+      engineMode: result.modeUsed,
+    );
+    if (!result.feasible) {
+      _analytics.logChangeInfeasible(
+        changeDueMinor: result.changeDueMinor.abs(),
+        ridersCount: draft.ridersCount,
+        fareMinor: state.fareMinor,
+      );
     }
 
     _refreshTransactions();
@@ -467,6 +496,10 @@ class CollectController extends Notifier<CollectState> {
     if (!saved) {
       return false;
     }
+
+    _analytics.logSettlementResolved(
+      amountMinor: record.remainingToReturnMinor + record.remainingToCollectMinor,
+    );
 
     _refreshTransactions();
     state = state.copyWith(

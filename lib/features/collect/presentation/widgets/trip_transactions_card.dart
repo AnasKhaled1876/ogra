@@ -14,54 +14,21 @@ import 'transaction_memory_tile.dart';
 class TripTransactionsCard extends ConsumerWidget {
   const TripTransactionsCard({
     required this.records,
-    required this.onAddTransaction,
     super.key,
   });
 
   final List<TransactionRecord> records;
-  final VoidCallback onAddTransaction;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final OgraUiTokens tokens = Theme.of(context).extension<OgraUiTokens>()!;
-    final ColorScheme scheme = Theme.of(context).colorScheme;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Row(
-          children: <Widget>[
-            Expanded(
-              child: Text(
-                'عمليات الرحلة',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-            ),
-            OutlinedButton.icon(
-              onPressed: onAddTransaction,
-              icon: Icon(Icons.add, color: scheme.primary),
-              iconAlignment: IconAlignment.end,
-              label: Text(
-                'عملية جديدة',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: scheme.primary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size(0, 42),
-                backgroundColor: scheme.primary.withValues(alpha: 0.08),
-                side: BorderSide(color: scheme.primary.withValues(alpha: 0.35)),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm,
-                  vertical: AppSpacing.xs,
-                ),
-              ),
-            ),
-          ],
+        Text(
+          'عمليات الرحلة',
+          style: Theme.of(context).textTheme.titleLarge,
         ),
         const SizedBox(height: AppSpacing.md),
         if (records.isEmpty)
